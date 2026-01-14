@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viver Bem | Seu Plano de Emagrecimento Personalizado</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body class="dashboard-active">
+    <!-- Auth Overlay -->
+    <div id="auth-screen" class="auth-overlay">
+        <div class="auth-card">
+            <h2 id="auth-title">Bem-vindo de volta</h2>
+            <p id="auth-subtitle">Entre para ver sua evolução</p>
+
+            <div class="form-group">
+                <label>Usuário</label>
+                <input type="text" id="auth-user" placeholder="Seu nome">
+            </div>
+            <div class="form-group">
+                <label>Senha</label>
+                <input type="password" id="auth-pass" placeholder="••••••••">
+            </div>
+
+            <button class="btn-primary" style="width: 100%;" id="btn-auth" onclick="handleAuth()">Entrar</button>
+            <p style="margin-top: 1.5rem; text-align: center; font-size: 0.85rem;">
+                <span id="auth-toggle-text">Não tem conta?</span>
+                <a href="#" style="color: var(--primary); font-weight: 700; text-decoration: none;"
+                    onclick="toggleAuthMode()">Crie uma aqui</a>
+            </p>
+            <button onclick="Storage.clearEverything()"
+                style="background: none; border: none; color: #95a5a6; font-size: 0.7rem; margin-top: 2rem; cursor: pointer; text-decoration: underline; width: 100%;">Limpar
+                sistema (Reset de Fábrica)</button>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar" style="display: none;">
+        <div class="sidebar-logo">
+            <span>🌿</span> Viver Bem PRO
+        </div>
+        <nav class="nav-menu">
+            <div class="nav-item active" onclick="navigate('dashboard')">
+                <span>🏠</span> Painel
+            </div>
+            <div class="nav-item" onclick="navigate('plano-atual')">
+                <span>📋</span> Plano Ativo
+            </div>
+            <div class="nav-item" onclick="navigate('historico')">
+                <span>🕒</span> Histórico
+            </div>
+            <div class="nav-item" onclick="navigate('anamnese')">
+                <span>➕</span> Novo Plano
+            </div>
+        </nav>
+        <div class="nav-item" onclick="handleLogout()" style="margin-top: auto; color: #e74c3c;">
+            <span>🚪</span> Sair
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content" id="app-container" style="display: none;">
+        <!-- Dashboard Section -->
+        <section id="view-dashboard" class="view-section">
+            <header style="margin-bottom: 2rem;">
+                <h1 style="text-align: left;">Olá, <span id="user-display-name">Carregando...</span></h1>
+                <p class="subtitle" style="text-align: left;">Sua jornada para uma vida melhor começa aqui.</p>
+            </header>
+
+            <div class="grid">
+                <div class="plan-item" style="border-left-color: #3498db;">
+                    <h4>Status Atual</h4>
+                    <div id="dash-info" style="margin-top: 1rem;">
+                        <!-- IMC e Pesagem atual -->
+                    </div>
+                </div>
+                <div class="plan-item" style="border-left-color: #9b59b6;">
+                    <h4>IA Personal Alpha</h4>
+                    <p id="personal-alpha-message" style="font-size: 0.9rem; margin-top: 0.5rem;">"Beba 500ml de água
+                        agora para manter seu metabolismo ativo."</p>
+                </div>
+            </div>
+
+            <div class="evolution-card" style="margin-top: 2rem;">
+                <h3 style="margin-bottom: 1.5rem;">Gráfico de Evolução</h3>
+                <canvas id="evolutionChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Dynamic Content Section -->
+        <section id="view-dynamic" class="view-section" style="display: none;">
+            <!-- Resultados (Tabs de Nutrição/Treino) serão injetados aqui -->
+            <div id="results" class="result-card">
+                <!-- Conteúdo existente do results v4 -->
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab('resumo')">Resumo</button>
+                    <button class="tab-btn" onclick="switchTab('nutricao')">Nutrição</button>
+                    <button class="tab-btn" onclick="switchTab('treino')">Treino</button>
+                    <button class="tab-btn" onclick="switchTab('cronograma')">Cronograma</button>
+                </div>
+
+                <div id="resumo" class="tab-content active">
+                    <div class="grid" id="resumo-grid-content"></div>
+                </div>
+
+                <div id="nutricao" class="tab-content" style="display: none;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 style="margin: 0;">Plano Nutricional</h3>
+                        <span class="badge badge-green" id="meta-diaria-display">2200 kcal</span>
+                    </div>
+
+                    <div class="sub-tabs">
+                        <button class="sub-tab-btn active" onclick="switchSubTab('tradicional')">Tradicional</button>
+                        <button class="sub-tab-btn" onclick="switchSubTab('lowcarb')">Low Carb</button>
+                        <button class="sub-tab-btn" onclick="switchSubTab('proteico')">Alta Proteína</button>
+                    </div>
+
+                    <div id="tradicional" class="sub-tab-content active">
+                        <div id="nutri-tradicional" class="grid-column"></div>
+                    </div>
+                    <div id="lowcarb" class="sub-tab-content" style="display: none;">
+                        <div id="nutri-lowcarb" class="grid-column"></div>
+                    </div>
+                    <div id="proteico" class="sub-tab-content" style="display: none;">
+                        <div id="nutri-proteico" class="grid-column"></div>
+                    </div>
+                </div>
+
+                <div id="treino" class="tab-content">
+                    <h3 style="margin-bottom: 1rem;">Cronograma de Treino Estruturado</h3>
+                    <div id="treino-container">
+                        <!-- Tabelas de treino JS -->
+                    </div>
+                </div>
+
+                <div id="cronograma" class="tab-content">
+                    <div class="evolution-card">
+                        <div class="evolution-header">
+                            <h3 style="margin: 0;">Evolução e Frequência</h3>
+                            <div id="total-peso-perder" class="badge-green badge">Meta: -00kg</div>
+                        </div>
+                        <div id="tabela-projecao-container">
+                            <table class="pro-table">
+                                <thead>
+                                    <tr>
+                                        <th>Período</th>
+                                        <th>Data Início</th>
+                                        <th>Meta de Peso</th>
+                                        <th>Progresso</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="projecao-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="grid" style="margin-top: 1.5rem;">
+                        <div class="plan-item">
+                            <h4>Compromisso Semanal</h4>
+                            <div id="check-semanal" class="checklist-container"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="btn-group" style="justify-content: center; margin-top: 2rem;">
+                    <button class="btn-primary" onclick="window.print()">Imprimir Dossiê</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Anamnese Section (Novo Plano) -->
+        <section id="view-anamnese" class="view-section" style="display: none;">
+            <div class="card">
+                <header style="margin-bottom: 2rem;">
+                    <h1>Novo Plano Personalizado</h1>
+                    <p class="subtitle">Preencha seus dados atuais para que a IA gere um novo plano.</p>
+                </header>
+                <div id="view-anamnese-content">
+                    <!-- O formulário será injetado pelo main.js (resetAnamnese) -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Histórico Section -->
+        <section id="view-historico" class="view-section" style="display: none;">
+            <header style="margin-bottom: 2rem;">
+                <h1>Histórico de Planos</h1>
+                <p class="subtitle">Aqui você encontra todos os seus planos anteriores.</p>
+            </header>
+            <div id="plan-history-list">
+                <!-- Injetado via JS -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal de Registro -->
+    <div id="modal-registro"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+        <div class="card" style="max-width:400px; width:100%; background: white;">
+            <h3>Registrar Peso Hoje</h3>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Peso Atual (kg)</label>
+                <input type="number" id="novo-peso" step="0.1" placeholder="Ex: 98.5">
+            </div>
+            <div class="btn-group">
+                <button class="btn-outline" onclick="fecharModalRegistro()">Cancelar</button>
+                <button class="btn-primary" onclick="salvarProgressoSemanal()">Salvar Registro</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="./main.js"></script>
+</body>
+
+</html>
