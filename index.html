@@ -34,9 +34,21 @@
                 <a href="#" style="color: var(--primary); font-weight: 700; text-decoration: none;"
                     onclick="toggleAuthMode()">Crie uma aqui</a>
             </p>
+
+            <!-- Backup Controls -->
+            <div style="margin-top: 2rem; border-top: 1px solid #eee; padding-top: 1rem; text-align: center;">
+                <input type="file" id="backup-file-input" style="display: none;" accept=".json"
+                    onchange="handleFileSelect(event)">
+                <button onclick="triggerRestore()"
+                    style="background: none; border: 1px dashed var(--primary); color: var(--primary); padding: 5px 10px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; width: 100%;">
+                    📂 Restaurar Conta de outro dispositivo
+                </button>
+            </div>
+
             <button onclick="Storage.clearEverything()"
-                style="background: none; border: none; color: #95a5a6; font-size: 0.7rem; margin-top: 2rem; cursor: pointer; text-decoration: underline; width: 100%;">Limpar
-                sistema (Reset de Fábrica)</button>
+                style="background: none; border: none; color: #95a5a6; font-size: 0.7rem; margin-top: 1rem; cursor: pointer; text-decoration: underline; width: 100%;">
+                Limpar tudo (Reset de Fábrica)
+            </button>
         </div>
     </div>
 
@@ -59,7 +71,11 @@
                 <span>➕</span> Novo Plano
             </div>
         </nav>
-        <div class="nav-item" onclick="handleLogout()" style="margin-top: auto; color: #e74c3c;">
+        <div class="nav-item" onclick="Storage.exportBackup()"
+            style="margin-top: auto; color: #3498db; margin-bottom: 0.5rem;">
+            <span>💾</span> Backup
+        </div>
+        <div class="nav-item" onclick="handleLogout()" style="color: #e74c3c;">
             <span>🚪</span> Sair
         </div>
     </aside>

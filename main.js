@@ -4,61 +4,89 @@ const SESSION_KEY = 'viver_bem_session';
 const Storage = {
     // Autenticação & Usuários
     getUsers: () => {
-        const usersRaw = localStorage.getItem(USERS_KEY);
-        const users = usersRaw ? JSON.parse(usersRaw) : {};
+        try {
+            const usersRaw = localStorage.getItem(USERS_KEY);
+            const users = usersRaw ? JSON.parse(usersRaw) : {};
 
-        // Limpeza e Migração de dados
-        let migrated = false;
-        Object.keys(users).forEach(u => {
-            const user = users[u];
+            // Limpeza e Migração de dados
+            let migrated = false;
+            Object.keys(users).forEach(u => {
+                const user = users[u];
 
-            // 1. Migração de histórico legada
-            if (user.history && !user.historico) {
-                user.historico = user.history;
-                delete user.history;
-                migrated = true;
+                // 1. Migração de histórico legada
+                if (user.history && !user.historico) {
+                    user.historico = user.history;
+                    delete user.history;
+                    migrated = true;
+                }
+
+                // 2. Limpeza de corrupção recursiva (Plano dentro de Plano)
+                if (user.plans && Array.isArray(user.plans)) {
+                    user.plans = user.plans.map(p => {
+                        if (p.plans) {
+                            delete p.plans; // Remove aninhamento infinito
+                            migrated = true;
+                        }
+                        return p;
+                    });
+                }
+
+                // 3. Garantir valores numéricos válidos
+                if (!user.atividade) {
+                    user.atividade = "1.2";
+                    migrated = true;
+                }
+            });
+
+            if (migrated) {
+                try {
+                    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+                } catch (e) {
+                    console.warn("Falha ao salvar migração automática:", e);
+                }
             }
 
-            // 2. Limpeza de corrupção recursiva (Plano dentro de Plano)
-            if (user.plans && Array.isArray(user.plans)) {
-                user.plans = user.plans.map(p => {
-                    if (p.plans) {
-                        delete p.plans; // Remove aninhamento infinito
-                        migrated = true;
-                    }
-                    return p;
-                });
-            }
-
-            // 3. Garantir valores numéricos válidos
-            if (!user.atividade) {
-                user.atividade = "1.2";
-                migrated = true;
-            }
-        });
-
-        if (migrated) {
-            localStorage.setItem(USERS_KEY, JSON.stringify(users));
+            return users;
+        } catch (e) {
+            console.error("Erro crítico ao ler usuários:", e);
+            alert("Erro: Não foi possível ler os dados do navegador. Seus dados podem estar corrompidos ou o armazenamento está indisponível.");
+            return {};
         }
-
-        return users;
     },
     saveUser: (username, password, userData = {}) => {
-        const users = Storage.getUsers();
-        users[username] = { password, ...userData, historico: [], plans: [] };
-        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        try {
+            const users = Storage.getUsers();
+            users[username] = { password, ...userData, historico: [], plans: [] };
+            localStorage.setItem(USERS_KEY, JSON.stringify(users));
+            return true;
+        } catch (e) {
+            console.error("Erro ao salvar usuáro:", e);
+            alert("ERRO: Não foi possível criar o usuário! O armazenamento do navegador pode estar cheio.");
+            return false;
+        }
     },
     updateUser: (username, updates) => {
-        const users = Storage.getUsers();
-        if (users[username]) {
-            users[username] = { ...users[username], ...updates };
-            localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        try {
+            const users = Storage.getUsers();
+            if (users[username]) {
+                users[username] = { ...users[username], ...updates };
+                localStorage.setItem(USERS_KEY, JSON.stringify(users));
+                return true;
+            }
+        } catch (e) {
+            console.error("Erro ao atualizar usuário:", e);
+            alert("ERRO AO SALVAR DADOS! O armazenamento do seu navegador pode estar cheio. Tente liberar espaço.");
+            return false;
         }
     },
 
     // Sessão
     setSession: (username) => {
-        localStorage.setItem(SESSION_KEY, username);
+        try {
+            localStorage.setItem(SESSION_KEY, username);
+        } catch (e) {
+            console.error("Erro de sessão:", e);
+        }
     },
     getSession: () => {
         return localStorage.getItem(SESSION_KEY);
@@ -80,8 +108,47 @@ const Storage = {
             Storage.updateUser(username, data);
         }
     },
+
+    // --- BACKUP SYSTEM ---
+    exportBackup: () => {
+        try {
+            const users = localStorage.getItem(USERS_KEY);
+            if (!users) return alert("Nada para exportar.");
+
+            const blob = new Blob([users], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `viver_bem_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert("Erro ao exportar backup: " + e.message);
+        }
+    },
+    importBackup: (fileContent) => {
+        try {
+            // Validar se é um JSON válido de usuários
+            const data = JSON.parse(fileContent);
+            if (typeof data !== 'object') throw new Error("Formato inválido");
+
+            // Mesclar ou Substituir? Substituir é mais seguro para restauração completa
+            if (confirm("ATENÇÃO: Isso irá SUBSTITUIR todos os dados e contas atuais pelos do arquivo de backup.\n\nDeseja continuar?")) {
+                localStorage.setItem(USERS_KEY, JSON.stringify(data));
+                alert("Backup restaurado com sucesso! A página será recarregada.");
+                location.reload();
+            }
+        } catch (e) {
+            alert("Erro ao restaurar: Arquivo inválido ou corrompido.");
+            console.error(e);
+        }
+    },
+
     clearEverything: () => {
-        if (confirm('Isso apagará todos os seus dados e você precisará criar uma nova conta. Deseja continuar?')) {
+        if (confirm('Isso apagará TODOS os dados, contas e históricos deste dispositivo permanentemente. Deseja continuar?')) {
             localStorage.clear();
             location.reload();
         }
@@ -107,6 +174,8 @@ window.toggleAuthMode = () => {
     document.getElementById('auth-subtitle').innerText = isLoginMode ? 'Entre para ver sua evolução' : 'Comece sua jornada hoje';
     document.getElementById('btn-auth').innerText = isLoginMode ? 'Entrar' : 'Cadastrar';
     document.getElementById('auth-toggle-text').innerText = isLoginMode ? 'Não tem conta?' : 'Já tem conta?';
+
+    // Esconder/Mostrar backup options dependendo do modo? Não, pode ser útil sempre.
 };
 
 window.handleAuth = () => {
@@ -122,13 +191,14 @@ window.handleAuth = () => {
             Storage.setSession(user);
             showDashboard();
         } else {
-            alert('Usuário ou senha inválidos');
+            alert('Usuário ou senha inválidos. Se você criou a conta em outro dispositivo, use a opção "Restaurar Backup" abaixo.');
         }
     } else {
-        if (users[user]) return alert('Usuário já existe');
-        Storage.saveUser(user, pass);
-        Storage.setSession(user);
-        showDashboard();
+        if (users[user]) return alert('Usuário já existe neste dispositivo.');
+        if (Storage.saveUser(user, pass)) {
+            Storage.setSession(user);
+            showDashboard();
+        }
     }
 };
 
@@ -136,6 +206,23 @@ window.handleLogout = () => {
     Storage.logout();
     location.reload();
 };
+
+// --- BACKUP UI HANDLERS ---
+window.triggerRestore = () => {
+    document.getElementById('backup-file-input').click();
+};
+
+window.handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        Storage.importBackup(e.target.result);
+    };
+    reader.readAsText(file);
+};
+
 
 // --- NAVIGATION ---
 window.navigate = (view) => {
@@ -687,7 +774,8 @@ function resetAnamnese(editData = null) {
             <div class="menu-item" onclick="switchTab('cronograma')">📅 Cronograma</div>
             <div class="menu-item" onclick="renderHistory()">📜 Histórico</div>
             <div style="margin-top: auto; padding-top: 2rem;">
-                <div class="menu-item" style="color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.2);" onclick="editCurrentPlan()">✏️ Editar Dados</div>
+                <div class="menu-item" style="color: #3498db; border: 1px solid rgba(52, 152, 219, 0.2);" onclick="Storage.exportBackup()">💾 Fazer Backup (Salvar Arquivo)</div>
+                <div class="menu-item" style="color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.2); margin-top:5px;" onclick="editCurrentPlan()">✏️ Editar Dados</div>
                 <div class="menu-item" onclick="resetAnamnese()">➕ Novo Plano</div>
                 <div class="menu-item" style="color: #e74c3c;" onclick="confirmLogout()">🚪 Sair</div>
             </div>
@@ -839,10 +927,16 @@ function resetAnamnese(editData = null) {
         } else {
             // Criar um resumo do plano antigo ANTES de atualizar para o histórico
             let previousPlans = oldData && oldData.plans ? [...oldData.plans] : [];
+
+            // Só arquiva se HOUVER um plano anterior válido (com peso definido)
             if (oldData && oldData.peso) {
+                // Check redundancy: Se o plano anterior for idêntico ao que estamos salvando (ex: user clicou novo plano mas preencheu o mesmo), evitar spam?
+                // Decisão: Melhor salvar mesmo assim pois a data muda.
+
                 // Salvar snapshot completo do plano antigo (exceto a lista de planos aninhada para evitar recursão)
                 let snapshot = { ...oldData };
                 delete snapshot.plans; // Remover a lista de planos para não aninhar infinitamente
+                delete snapshot.weekly_tracking; // Opcional: manter ou não o tracking semanal no snapshot? Melhor não poluir.
 
                 // Adicionar data de finalização
                 snapshot.finalizado_em = new Date().toLocaleDateString('pt-BR');
@@ -865,12 +959,14 @@ function resetAnamnese(editData = null) {
                 equipamentos: equips,
                 ritmo: 1.0,
                 historico: [{ data: new Date().toLocaleDateString('pt-BR'), peso: pesoAtual }],
-                plans: previousPlans
+                plans: previousPlans,
+                weekly_tracking: [] // Novo plano começa com tracking vazio? Sim, faz sentido reiniciar o foco semanal.
             };
         }
 
-        Storage.saveData(newData); // Usa saveData que já lida com o user session
-        setTimeout(() => navigate('plano-atual'), 100);
+        if (Storage.saveData(newData) !== false) {
+            setTimeout(() => navigate('plano-atual'), 100);
+        }
     });
 }
 
@@ -1439,8 +1535,27 @@ window.addWeeklyEntry = () => {
     // Ordenar por data decrescente
     data.weekly_tracking.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    Storage.updateUser(username, { weekly_tracking: data.weekly_tracking });
+    // Feature de Sincronização
+    // Se o peso final desta semana for diferente do peso atual do usuário, oferecer update
+    if (Math.abs(end - data.peso) > 0.1) {
+        if (confirm(`Parabéns pelo registro! \n\nVocê finalizou a semana com ${end}kg. \nDeseja atualizar seu PESO ATUAL (que está ${data.peso}kg) para este novo valor? \n\nIsso atualizará seus cálculos de dieta e treino.`)) {
+            data.peso = end;
+            // Também adiciona ao histórico geral para o gráfico
+            const hojeData = new Date().toLocaleDateString('pt-BR');
+            if (!data.historico) data.historico = [];
+            data.historico.push({ data: hojeData, peso: end });
+            alert("Peso principal atualizado com sucesso!");
+        }
+    }
+
+    Storage.updateUser(username, {
+        weekly_tracking: data.weekly_tracking,
+        peso: data.peso,
+        historico: data.historico
+    });
+
     renderTrackingTable(data); // Re-render com dados atualizados
+    renderDashboard(); // Atualiza dashboard caso peso tenha mudado
 
     // Limpar inputs de peso
     document.getElementById('track-start').value = '';
