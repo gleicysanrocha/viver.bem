@@ -1,63 +1,102 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// --- CONFIGURAÇÃO DO FIREBASE (COLE SUAS CHAVES AQUI) ---
+// Siga o guia 'firebase_setup.md' para obter esses dados.
+const firebaseConfig = {
+apiKey: "AIzaSyAY2-tNA8g4aIgeaT70hw7-FCKcvI22HLc",
+  authDomain: "viver-bem-bfbe8.firebaseapp.com",
+  projectId: "viver-bem-bfbe8",
+  storageBucket: "viver-bem-bfbe8.firebasestorage.app",
+  messagingSenderId: "667806663588",
+  appId: "1:667806663588:web:cf63aa0913e58fc72eb731"
+};
+
+// Inicialização do Firebase (Só roda se a config estiver preenchida corretamente)
+let db = null;
+const isFirebaseConfigured = firebaseConfig.apiKey !== "SUA_API_KEY_AQUI";
+
+if (isFirebaseConfigured) {
+    try {
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        console.log("Firebase conectado com sucesso!");
+    } catch (e) {
+        console.error("Erro ao conectar Firebase:", e);
+    }
+} else {
+    console.warn("Firebase não configurado. O app rodará apenas em Modo Offline (LocalStorage).");
+}
+
 const USERS_KEY = 'viver_bem_users';
 const SESSION_KEY = 'viver_bem_session';
+
+// Helper para sincronizar nuvem
+const Cloud = {
+    saveUserInfo: async (username, data) => {
+        if (!db) return;
+        try {
+            // Salva na coleção 'users', documento = username
+            await setDoc(doc(db, "users", username), data);
+            console.log("Dados sincronizados com a nuvem.");
+        } catch (e) {
+            console.error("Erro ao salvar na nuvem:", e);
+        }
+    },
+    loadUserInfo: async (username) => {
+        if (!db) return null;
+        try {
+            const docRef = doc(db, "users", username);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                console.log("Dados baixados da nuvem.");
+                return docSnap.data();
+            }
+        } catch (e) {
+            console.error("Erro ao baixar da nuvem:", e);
+        }
+        return null;
+    }
+};
 
 const Storage = {
     // Autenticação & Usuários
     getUsers: () => {
+        // ... (Mantém lógica original de leitura local) ...
         try {
             const usersRaw = localStorage.getItem(USERS_KEY);
-            const users = usersRaw ? JSON.parse(usersRaw) : {};
-
-            // Limpeza e Migração de dados
-            let migrated = false;
-            Object.keys(users).forEach(u => {
-                const user = users[u];
-
-                // 1. Migração de histórico legada
-                if (user.history && !user.historico) {
-                    user.historico = user.history;
-                    delete user.history;
-                    migrated = true;
-                }
-
-                // 2. Limpeza de corrupção recursiva (Plano dentro de Plano)
-                if (user.plans && Array.isArray(user.plans)) {
-                    user.plans = user.plans.map(p => {
-                        if (p.plans) {
-                            delete p.plans; // Remove aninhamento infinito
-                            migrated = true;
-                        }
-                        return p;
-                    });
-                }
-
-                // 3. Garantir valores numéricos válidos
-                if (!user.atividade) {
-                    user.atividade = "1.2";
-                    migrated = true;
-                }
-            });
-
-            if (migrated) {
-                try {
-                    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-                } catch (e) {
-                    console.warn("Falha ao salvar migração automática:", e);
-                }
-            }
-
-            return users;
+            return usersRaw ? JSON.parse(usersRaw) : {};
         } catch (e) {
-            console.error("Erro crítico ao ler usuários:", e);
-            alert("Erro: Não foi possível ler os dados do navegador. Seus dados podem estar corrompidos ou o armazenamento está indisponível.");
+            console.error("Erro LocalStorage:", e);
             return {};
         }
     },
+
+    // Método especial para sincronizar
+    syncFromCloud: async (username) => {
+        if (!isFirebaseConfigured) return;
+        const cloudData = await Cloud.loadUserInfo(username);
+        if (cloudData) {
+            // Atualiza localstorage com dados da nuvem (Cloud vence Local)
+            const users = Storage.getUsers();
+            users[username] = cloudData;
+            localStorage.setItem(USERS_KEY, JSON.stringify(users));
+            console.log("Local atualizado via Nuvem.");
+            return true;
+        }
+        return false;
+    },
+
     saveUser: (username, password, userData = {}) => {
         try {
             const users = Storage.getUsers();
-            users[username] = { password, ...userData, historico: [], plans: [] };
+            const newUser = { password, ...userData, historico: [], plans: [] };
+            users[username] = newUser;
             localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+            // Fire-and-forget Cloud Save
+            Cloud.saveUserInfo(username, newUser);
+
             return true;
         } catch (e) {
             console.error("Erro ao salvar usuáro:", e);
@@ -71,6 +110,10 @@ const Storage = {
             if (users[username]) {
                 users[username] = { ...users[username], ...updates };
                 localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+                // Fire-and-forget Cloud Save
+                Cloud.saveUserInfo(username, users[username]);
+
                 return true;
             }
         } catch (e) {
@@ -158,9 +201,15 @@ const Storage = {
 let myChart = null;
 let isLoginMode = true;
 
-window.onload = () => {
+window.onload = async () => {
     const session = Storage.getSession();
     if (session) {
+        // Tentar baixar dados atualizados da nuvem ao iniciar
+        if (typeof isFirebaseConfigured !== 'undefined' && isFirebaseConfigured) {
+            const authSub = document.getElementById('auth-subtitle');
+            if (authSub) authSub.innerText = "Sincronizando com a nuvem...";
+            await Storage.syncFromCloud(session);
+        }
         showDashboard();
     } else {
         showAuth();
@@ -174,15 +223,24 @@ window.toggleAuthMode = () => {
     document.getElementById('auth-subtitle').innerText = isLoginMode ? 'Entre para ver sua evolução' : 'Comece sua jornada hoje';
     document.getElementById('btn-auth').innerText = isLoginMode ? 'Entrar' : 'Cadastrar';
     document.getElementById('auth-toggle-text').innerText = isLoginMode ? 'Não tem conta?' : 'Já tem conta?';
-
-    // Esconder/Mostrar backup options dependendo do modo? Não, pode ser útil sempre.
 };
 
-window.handleAuth = () => {
+window.handleAuth = async () => {
     const user = document.getElementById('auth-user').value.trim();
     const pass = document.getElementById('auth-pass').value.trim();
 
     if (!user || !pass) return alert('Preencha todos os campos');
+
+    // Tentar pegar do Cloud primeiro para garantir que login funcione em device novo
+    if (isLoginMode && typeof isFirebaseConfigured !== 'undefined' && isFirebaseConfigured) {
+        const btn = document.getElementById('btn-auth');
+        const originalText = btn.innerText;
+        btn.innerText = "Verificando nuvem...";
+        try {
+            await Storage.syncFromCloud(user);
+        } catch (e) { console.error(e); }
+        btn.innerText = originalText;
+    }
 
     const users = Storage.getUsers();
 
@@ -191,7 +249,7 @@ window.handleAuth = () => {
             Storage.setSession(user);
             showDashboard();
         } else {
-            alert('Usuário ou senha inválidos. Se você criou a conta em outro dispositivo, use a opção "Restaurar Backup" abaixo.');
+            alert('Usuário ou senha inválidos. Se é seu primeiro acesso neste dispositivo, verifique se configurou o Firebase corretamente ou use a Restauração de Backup.');
         }
     } else {
         if (users[user]) return alert('Usuário já existe neste dispositivo.');
