@@ -4,12 +4,12 @@ import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/fireb
 // --- CONFIGURAÇÃO DO FIREBASE (COLE SUAS CHAVES AQUI) ---
 // Siga o guia 'firebase_setup.md' para obter esses dados.
 const firebaseConfig = {
-apiKey: "AIzaSyAY2-tNA8g4aIgeaT70hw7-FCKcvI22HLc",
-  authDomain: "viver-bem-bfbe8.firebaseapp.com",
-  projectId: "viver-bem-bfbe8",
-  storageBucket: "viver-bem-bfbe8.firebasestorage.app",
-  messagingSenderId: "667806663588",
-  appId: "1:667806663588:web:cf63aa0913e58fc72eb731"
+    apiKey: "AIzaSyAY2-tNA8g4aIgeaT70hw7-FCKcvI22HLc",
+    authDomain: "viver-bem-bfbe8.firebaseapp.com",
+    projectId: "viver-bem-bfbe8",
+    storageBucket: "viver-bem-bfbe8.firebasestorage.app",
+    messagingSenderId: "667806663588",
+    appId: "1:667806663588:web:cf63aa0913e58fc72eb731"
 };
 
 // Inicialização do Firebase (Só roda se a config estiver preenchida corretamente)
@@ -27,6 +27,36 @@ if (isFirebaseConfigured) {
 } else {
     console.warn("Firebase não configurado. O app rodará apenas em Modo Offline (LocalStorage).");
 }
+
+// --- PWA INSTALLATION LOGIC ---
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Previne o Chrome de mostrar a barra automaticamente (para podermos controlar)
+    e.preventDefault();
+    // Salva o evento para acionar depois
+    deferredPrompt = e;
+    // Mostra o botão de instalar na interface
+    const installBtn = document.getElementById('btn-install-pwa');
+    if (installBtn) {
+        installBtn.style.display = 'flex';
+        console.log("PWA: Botão de instalação ativado!");
+    }
+});
+
+window.installPWA = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`PWA: Usuário escolheu ${outcome}`);
+    deferredPrompt = null;
+    document.getElementById('btn-install-pwa').style.display = 'none';
+};
+
+window.addEventListener('appinstalled', () => {
+    console.log('PWA: Aplicativo instalado com sucesso');
+    deferredPrompt = null;
+});
 
 const USERS_KEY = 'viver_bem_users';
 const SESSION_KEY = 'viver_bem_session';

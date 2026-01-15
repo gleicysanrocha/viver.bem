@@ -11,6 +11,9 @@ const ASSETS_TO_CACHE = [
 
 // Instalação: Cacheia os arquivos estáticos
 self.addEventListener('install', (event) => {
+    // Forçar o worker a esperar a instalação terminar, mas pular a espera para ativar
+    self.skipWaiting();
+
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then((cache) => {
@@ -20,16 +23,19 @@ self.addEventListener('install', (event) => {
     );
 });
 
-// Ativação: Limpa caches antigos
+// Ativação: Limpa caches antigos e toma controle
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        caches.keys().then((keyList) => {
-            return Promise.all(keyList.map((key) => {
-                if (key !== CACHE_NAME) {
-                    return caches.delete(key);
-                }
-            }));
-        })
+        Promise.all([
+            self.clients.claim(), // Toma controle das abas abertas imediatamente
+            caches.keys().then((keyList) => {
+                return Promise.all(keyList.map((key) => {
+                    if (key !== CACHE_NAME) {
+                        return caches.delete(key);
+                    }
+                }));
+            })
+        ])
     );
 });
 
